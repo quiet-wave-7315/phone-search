@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ভোটার সার্চ</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: system-ui, "Noto Sans Bengali", sans-serif; background: #f7f4ef; color: #1c1a17; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 14px 14px 20px; }
+  h1 { font-size: 22px; margin: 4px 0 2px; }
+  .sub { color: #6b655c; font-size: 13px; margin: 0 0 12px; }
+  .card { background: #fff; border: 1px solid #e5ded2; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  label { font-size: 13px; color: #6b655c; display: block; margin: 4px 0 6px; }
+  input { width: 100%; padding: 12px; font-size: 17px; border: 1px solid #cfc6b8; border-radius: 10px; background: #fff; }
+  button { width: 100%; padding: 13px; margin-top: 10px; font-size: 17px; border: 0; border-radius: 10px; background: #0d6b4f; color: #fff; cursor: pointer; }
+  button.ghost { background: #fff; color: #1c1a17; border: 1px solid #cfc6b8; }
+  .note { font-size: 12px; color: #6b655c; margin-top: 10px; line-height: 1.6; }
+  .status { font-size: 13px; margin: 8px 0; }
+  .status.ok { color: #0d6b4f; }
+  .status.bad { color: #a33; }
+  iframe { width: 100%; height: 78vh; border: 1px solid #e5ded2; border-radius: 12px; background: #fff; }
+  a.open { display: block; text-align: center; margin-top: 10px; font-size: 15px; color: #0d6b4f; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔍 ভোটার সার্চ</h1>
+  <p class="sub">প্রাইভেট সার্চ পেজ — শুধু আপনার নিজের ব্যবহারের জন্য</p>
+
+  <div class="card" id="keyCard" style="display:none">
+    <label for="key">সার্চ key লিখুন (একবারই দিতে হবে, এই ফোনেই থাকবে)</label>
+    <input id="key" type="password" placeholder="key" autocomplete="off">
+    <button id="saveKey">সংরক্ষণ করুন</button>
+    <p class="note">key কোথাও পাঠানো হয় না, সাইটে বা GitHub-এ লেখা নেই — শুধু এই ফোনের ব্রাউজারে থাকে।</p>
+  </div>
+
+  <div class="status" id="status">লিংক চেক হচ্ছে…</div>
+  <div id="viewer" style="display:none">
+    <iframe id="frame" title="ভোটার সার্চ"></iframe>
+    <a class="open" id="openLink" href="#" target="_blank" rel="noopener">নতুন ট্যাবে খুলুন ↗</a>
+  </div>
+  <div class="card" style="display:none" id="changeKeyCard">
+    <button class="ghost" id="changeKey">key বদলান / মুছুন</button>
+  </div>
+</div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var statusEl = $("status");
+
+  // Key in the page URL (?key=...) is saved once, then removed from the URL.
+  var params = new URLSearchParams(location.search);
+  var urlKey = params.get("key");
+  if (urlKey) {
+    try { localStorage.setItem("voter_key", urlKey); } catch (e) {}
+    history.replaceState(null, "", location.pathname);
+  }
+
+  var key = null;
+  try { key = localStorage.getItem("voter_key") || ""; } catch (e) {}
+  if (!key) { $("keyCard").style.display = "block"; }
+
+  $("saveKey").onclick = function () {
+    var v = $("key").value.trim();
+    if (!v) { statusEl.textContent = "key লিখুন।"; statusEl.className = "status bad"; return; }
+    try { localStorage.setItem("voter_key", v); } catch (e) {}
+    key = v;
+    $("keyCard").style.display = "none";
+    load();
+  };
+  $("changeKey").onclick = function () {
+    try { localStorage.removeItem("voter_key"); } catch (e) {}
+    key = "";
+    $("viewer").style.display = "none";
+    $("changeKeyCard").style.display = "none";
+    $("keyCard").style.display = "block";
+    statusEl.textContent = "key মুছে ফেলা হয়েছে। নতুন key দিন।";
+  };
+
+  function load() {
+    if (!key) return;
+    statusEl.textContent = "লিংক চেক হচ্ছে…";
+    statusEl.className = "status";
+    fetch("current.json?ts=" + Date.now(), { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("http " + r.status); return r.json(); })
+      .then(function (j) {
+        if (!j.url) throw new Error("no url");
+        var src = j.url + "/?key=" + encodeURIComponent(key);
+        $("frame").src = src;
+        $("openLink").href = src;
+        $("viewer").style.display = "block";
+        $("changeKeyCard").style.display = "block";
+        statusEl.textContent = "লিংক চালু আছে — সার্চ খুলছে।";
+        statusEl.className = "status ok";
+      })
+      .catch(function () {
+        statusEl.textContent = "লিংক পাওয়া যাচ্ছে না — কিছুক্ষণ পর আবার চেষ্টা করুন।";
+        statusEl.className = "status bad";
+      });
+  }
+  load();
+})();
+</script>
+</body>
+</html>
