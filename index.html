@@ -348,15 +348,15 @@ button.search:disabled{opacity:.5;cursor:default}
           <label for="union">ইউনিয়ন</label>
           <select class="input" id="union"><option value="">— সব ইউনিয়ন —</option></select>
         </div>
+        <div class="field">
+          <label for="village">গ্রাম</label>
+          <select class="input" id="village" disabled><option value="">— আগে ইউনিয়ন বাছুন —</option></select>
+        </div>
       </div>
     </div>
     <div class="msg" id="filtersMsg" style="display:none;margin-top:12px"></div>
     <button type="button" class="details-toggle" id="detailsToggle">＋ আরো বিস্তারিত খোঁজ</button>
     <div id="details">
-      <div class="field" style="margin-top:14px">
-        <label for="area">এলাকা</label>
-        <input class="input" id="area" type="search" placeholder="যেমন: লবণচরা" autocomplete="off">
-      </div>
       <div class="field" style="margin-top:14px">
         <label for="father">বাবার নাম</label>
         <input class="input" id="father" type="search" placeholder="বাবার নামের অংশ" autocomplete="off">
@@ -536,9 +536,16 @@ $("districtSel").onchange = function () {
   loadFilters();
 };
 
+// গ্রাম রিসেট — ইউনিয়ন বাছা না থাকলে ড্রপডাউন বন্ধ থাকে।
+function resetVillage() {
+  const v = $("village");
+  v.innerHTML = '<option value="">— আগে ইউনিয়ন বাছুন —</option>';
+  v.disabled = true;
+}
+
 function loadFilters() {
   const box = $("filters");
-  if (district === "all") { box.style.display = "none"; return; }
+  if (district === "all") { box.style.display = "none"; resetVillage(); return; }
   $("filtersMsg").style.display = "none";
   apiFetch("/api/filters?district=" + district).then(r => r.json()).then(f => {
     if (f.error) { showFiltersError(f.error); return; }
@@ -547,6 +554,7 @@ function loadFilters() {
         items.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
     };
     fill($("upazila"), f.upazila); fill($("union"), f.union);
+    resetVillage();
     box.style.display = "block";
   }).catch(() => {
     showFiltersError("উপজেলা/ইউনিয়ন লোড হয়নি — লিংকটি চালু আছে কিনা দেখুন, তারপর জেলা আবার বাছুন");
@@ -563,6 +571,7 @@ function showFiltersError(msg) {
 $("upazila").onchange = function () {
   const up = $("upazila").value;
   $("union").innerHTML = '<option value="">— সব —</option>';
+  resetVillage();
   $("filtersMsg").style.display = "none";
   const q = "/api/filters?district=" + district + (up ? "&upazila=" + encodeURIComponent(up) : "");
   apiFetch(q).then(r => r.json()).then(f => {
@@ -571,6 +580,26 @@ $("upazila").onchange = function () {
       f.union.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
   }).catch(() => {
     showFiltersError("ইউনিয়ন লোড হয়নি — লিংকটি চালু আছে কিনা দেখুন, তারপর উপজেলা আবার বাছুন");
+  });
+};
+
+// ইউনিয়ন বদলালে গ্রাম আবার লোড করো — শুধু ওই ইউনিয়নের গ্রাম।
+$("union").onchange = function () {
+  const un = $("union").value;
+  resetVillage();
+  $("filtersMsg").style.display = "none";
+  if (!un) return;
+  const up = $("upazila").value;
+  const q = "/api/filters?district=" + district +
+    (up ? "&upazila=" + encodeURIComponent(up) : "") +
+    "&union=" + encodeURIComponent(un);
+  apiFetch(q).then(r => r.json()).then(f => {
+    if (f.error) { showFiltersError(f.error); return; }
+    $("village").innerHTML = '<option value="">— সব গ্রাম —</option>' +
+      f.areas.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+    $("village").disabled = false;
+  }).catch(() => {
+    showFiltersError("গ্রাম লোড হয়নি — লিংকটি চালু আছে কিনা দেখুন, তারপর ইউনিয়ন আবার বাছুন");
   });
 };
 
@@ -584,17 +613,17 @@ $("detailsToggle").onclick = () => {
 function run(p) {
   page = p || 1;
   const q = $("q").value.trim(), vn = $("voter_no").value.trim();
-  const area = $("area").value.trim(), father = $("father").value.trim(),
+  const village = district !== "all" ? $("village").value : "";
+  const father = $("father").value.trim(),
         mother = $("mother").value.trim(), address = $("address").value.trim(),
         occupation = $("occupation").value.trim();
-  if (!q && !vn && !area && !father && !mother && !address && !occupation) {
+  if (!q && !vn && !village && !father && !mother && !address && !occupation) {
     $("meta").textContent = "নাম, ভোটার নম্বর বা অন্য কোনো তথ্য লিখুন।"; return;
   }
   $("go").disabled = true; $("meta").textContent = "খুঁজছি…";
   const params = new URLSearchParams({ district, page });
   if (q) params.set("q", q);
   if (vn) params.set("voter_no", vn);
-  if (area) params.set("area", area);
   if (father) params.set("father", father);
   if (mother) params.set("mother", mother);
   if (address) params.set("address", address);
@@ -602,6 +631,7 @@ function run(p) {
   if (district !== "all") {
     if ($("upazila").value) params.set("upazila", $("upazila").value);
     if ($("union").value) params.set("union", $("union").value);
+    if (village) params.set("area", village);
   }
   apiFetch("/api/search?" + params).then(r => r.json()).then(d => {
     $("go").disabled = false;
@@ -643,7 +673,7 @@ function run(p) {
   });
 }
 $("go").onclick = () => run(1);
-["q", "voter_no", "area", "father", "mother", "address", "occupation"].forEach(id => {
+["q", "voter_no", "father", "mother", "address", "occupation"].forEach(id => {
   $(id).addEventListener("keydown", e => { if (e.key === "Enter") run(1); });
 });
 $("prev").onclick = () => run(page - 1);
