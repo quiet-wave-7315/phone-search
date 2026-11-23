@@ -190,14 +190,6 @@ select.input{
 /* ---------- form ---------- */
 .fld-label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:14px 0 6px}
 .fld-label:first-child{margin-top:0}
-.districts{display:flex;flex-wrap:wrap;gap:8px}
-.districts button{
-  padding:9px 14px;font-size:15px;font-family:inherit;border-radius:999px;
-  border:1px solid var(--line-2);background:var(--card);color:var(--ink);cursor:pointer;
-  transition:background .16s,color .16s,border-color .16s;
-}
-.districts button:hover{border-color:var(--green);color:var(--green)}
-.districts button.on{background:var(--green);color:#fff;border-color:var(--green)}
 button.search{
   width:100%;padding:13px;margin-top:16px;font-size:17px;font-weight:700;font-family:inherit;
   border:0;border-radius:10px;background:var(--green);color:#fff;cursor:pointer;
@@ -218,6 +210,11 @@ button.search:disabled{opacity:.5;cursor:default}
 
 /* ---------- results ---------- */
 .meta{font-size:13px;color:var(--ink-3);margin:4px 2px 12px}
+/* stats error notice — ব্যর্থ হলে কারণ দেখাবে, চুপ করে "—" হবে না */
+.msg{
+  border-radius:9px;padding:11px 14px;font-size:.85rem;line-height:1.5;margin-bottom:12px;
+  background:var(--accent-wash);border:1px solid var(--accent-line);color:var(--accent);
+}
 .person-card{
   background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;
   display:flex;flex-direction:column;gap:12px;margin-bottom:10px;
@@ -311,25 +308,33 @@ button.search:disabled{opacity:.5;cursor:default}
         <div class="donut-legend" id="donutLegend"></div>
       </div>
     </div>
-    <div class="dash-bars"><div class="stat-grid" id="statsGrid"></div></div>
+    <div class="dash-bars">
+      <div class="msg" id="statsMsg" style="display:none">
+        <div id="statsMsgText"></div>
+        <button class="btn btn-ghost" id="statsRetry" type="button" style="display:none;margin-top:8px">আবার চেষ্টা করুন</button>
+      </div>
+      <div class="stat-grid" id="statsGrid"></div>
+    </div>
   </section>
 
   <section class="card card-pad">
-    <label class="fld-label">জেলা</label>
-    <div class="districts" id="districts">
-      <button data-d="all" class="on">সব জেলা</button>
-      <button data-d="khulna">খুলনা</button>
-      <button data-d="jessore">যশোর</button>
-      <button data-d="satkhira">সাতক্ষীরা</button>
-      <button data-d="barishal">বরিশাল</button>
-      <button data-d="gopalganj">গোপালগঞ্জ</button>
-      <button data-d="pirojpur">পিরোজপুর</button>
-      <button data-d="dhaka">ঢাকা</button>
-      <button data-d="rajshahi">রাজশাহী</button>
-      <button data-d="lalmonirhat">লালমনিরহাট</button>
-      <button data-d="thakurgaon">ঠাকুরগাঁও</button>
-      <button data-d="gazipur">গাজীপুর</button>
-      <button data-d="bagerhat">বাগেরহাট</button>
+    <div class="field">
+      <label for="districtSel">জেলা</label>
+      <select class="input" id="districtSel">
+        <option value="all">সব জেলা</option>
+        <option value="khulna">খুলনা</option>
+        <option value="jessore">যশোর</option>
+        <option value="satkhira">সাতক্ষীরা</option>
+        <option value="barishal">বরিশাল</option>
+        <option value="gopalganj">গোপালগঞ্জ</option>
+        <option value="pirojpur">পিরোজপুর</option>
+        <option value="dhaka">ঢাকা</option>
+        <option value="rajshahi">রাজশাহী</option>
+        <option value="lalmonirhat">লালমনিরহাট</option>
+        <option value="thakurgaon">ঠাকুরগাঁও</option>
+        <option value="gazipur">গাজীপুর</option>
+        <option value="bagerhat">বাগেরহাট</option>
+      </select>
     </div>
     <div class="field" style="margin-top:14px">
       <label for="q">নাম দিয়ে খুঁজুন</label>
@@ -434,8 +439,15 @@ function donutSVG(items, total) {
   return `<svg viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="জেলার ভোটার ভাগ">${arcs}</svg>`;
 }
 
+// পরিসংখ্যান লোড — ব্যর্থ হলে চুপ করে থাকবে না, কারণ দেখাবে।
 function loadStats() {
-fetch(withKey("/api/stats")).then(r => r.json()).then(s => {
+  $("statsMsg").style.display = "none";
+  fetch(withKey("/api/stats")).then(r => r.json()).then(s => {
+  if (s.error) {
+    showStatsError(s.error, false);
+    if (typeof handleKeyError === "function") handleKeyError(s.error);
+    return;
+  }
   $("totalCount").textContent = bn(s.total);
   const order = [["khulna","খুলনা"],["jessore","যশোর"],["satkhira","সাতক্ষীরা"],
                  ["barishal","বরিশাল"],["gopalganj","গোপালগঞ্জ"],["pirojpur","পিরোজপুর"],
@@ -465,7 +477,31 @@ fetch(withKey("/api/stats")).then(r => r.json()).then(s => {
       `<span class="legend-val">${bn(it.rows)} · ${bn(pct)}%</span></span></div>`;
   }).join("");
   $("donutCard").style.display = "block";
-}).catch(() => { $("totalCount").textContent = "—"; });
+  }).catch(() => {
+    showStatsError("পরিসংখ্যান লোড হয়নি — লিংকটি চালু আছে কিনা দেখুন, তারপর আবার চেষ্টা করুন", true);
+  });
+}
+
+function showStatsError(msg, retry) {
+  $("totalCount").textContent = "—";
+  $("statsMsgText").textContent = msg;
+  $("statsRetry").style.display = retry ? "inline-flex" : "none";
+  $("statsMsg").style.display = "block";
+}
+
+$("statsRetry").onclick = function () {
+  if (typeof API !== "undefined" && API) { loadStats(); }
+  else if (typeof startApp === "function") { startApp(); }
+  else { loadStats(); }
+};
+
+// key ভুল হলে (stats-এ error): key কার্ড আবার দেখাও, যাতে নতুন key দেওয়া যায়।
+function handleKeyError(msg) {
+  try { localStorage.removeItem("voter_key"); } catch (e) {}
+  KEY = "";
+  $("app").style.display = "none";
+  $("keyCard").style.display = "block";
+  $("keyMsg").textContent = msg;
 }
 
 // Tunnel base URL (current.json) নিয়ে তারপর চালু করো।
@@ -495,14 +531,11 @@ $("changeKey").onclick = function () {
 
 if (KEY) { startApp(); } else { $("keyCard").style.display = "block"; }
 
-document.querySelectorAll("#districts button").forEach(b => {
-  b.onclick = () => {
-    document.querySelectorAll("#districts button").forEach(x => x.classList.remove("on"));
-    b.classList.add("on");
-    district = b.dataset.d;
-    loadFilters();
-  };
-});
+
+$("districtSel").onchange = function () {
+  district = $("districtSel").value;
+  loadFilters();
+};
 
 function loadFilters() {
   const box = $("filters");
