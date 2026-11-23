@@ -150,26 +150,22 @@ select.input{
   margin:8px 0 4px;
 }
 .dash-sub{font-size:.83rem;color:rgba(255,255,255,.72)}
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
-.dash-bars{
+/* error notice under the hero — its own card when stats fail */
+.dash-msg{
   background:var(--card);border:1px solid var(--line);border-top:0;
   border-radius:0 0 16px 16px;padding:16px;
 }
-.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;
-  box-shadow:var(--shadow-sm);transition:transform .16s,box-shadow .16s}
-.stat:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
-.stat-label{font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
-  font-weight:700;margin-bottom:8px}
-.stat-value{font-family:var(--serif);font-size:1.65rem;line-height:1;letter-spacing:-.02em}
-.stat-note{font-size:.75rem;color:var(--ink-3);margin-top:5px}
-.dbar{height:6px;background:var(--line);border-radius:999px;margin-top:8px;overflow:hidden}
-.dbar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--green),var(--green-2))}
+.dash-msg .msg{margin:0}
 
 /* ---------- donut chart ---------- */
 .dash-donut{
   background:var(--card);border:1px solid var(--line);border-top:0;
-  padding:20px 18px 16px;
+  border-radius:0 0 16px 16px;padding:20px 18px 16px;
 }
+/* donut draw-in + legend slide-in (reduced-motion guard is at the end of the CSS) */
+@keyframes legendIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+@keyframes centerFade{from{opacity:0}to{opacity:1}}
+.donut-center.fade-in{animation:centerFade .5s ease-out .15s both}
 .donut-head h2{font-family:var(--serif);font-weight:400;font-size:1.15rem;letter-spacing:-.02em;margin:0 0 2px}
 .donut-head p{margin:0 0 14px;font-size:.85rem;color:var(--ink-2)}
 .donut-head p b{color:var(--green)}
@@ -247,7 +243,6 @@ button.search:disabled{opacity:.5;cursor:default}
 .pager button{flex:1}
 .foot{text-align:center;font-size:12px;color:var(--ink-3);margin-top:20px}
 @media (max-width:380px){
-  .dash-bars .stat-grid{grid-template-columns:1fr}
   .card-pad{padding:16px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -308,12 +303,11 @@ button.search:disabled{opacity:.5;cursor:default}
         <div class="donut-legend" id="donutLegend"></div>
       </div>
     </div>
-    <div class="dash-bars">
-      <div class="msg" id="statsMsg" style="display:none">
+    <div class="dash-msg" id="statsMsg" style="display:none">
+      <div class="msg">
         <div id="statsMsgText"></div>
         <button class="btn btn-ghost" id="statsRetry" type="button" style="display:none;margin-top:8px">আবার চেষ্টা করুন</button>
       </div>
-      <div class="stat-grid" id="statsGrid"></div>
     </div>
   </section>
 
@@ -436,7 +430,7 @@ function donutSVG(items, total) {
   const arcs = items.map((it, i) => {
     const frac = total ? it.rows / total : 0;
     const len = frac * C + 0.8; // সামান্য overlap — স্লাইসের মাঝে ফাঁক দেখাবে না
-    const s = `<circle cx="100" cy="100" r="${R}" fill="none" stroke="${DONUT_COLORS[i % DONUT_COLORS.length]}" stroke-width="34" stroke-dasharray="${len.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 100 100)"/>`;
+    const s = `<circle class="donut-arc" cx="100" cy="100" r="${R}" fill="none" stroke="${DONUT_COLORS[i % DONUT_COLORS.length]}" stroke-width="34" stroke-dasharray="0 ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 100 100)" data-dash="${len.toFixed(2)} ${C.toFixed(2)}"/>`;
     off += frac * C;
     return s;
   }).join("");
@@ -457,14 +451,6 @@ function loadStats() {
                  ["barishal","বরিশাল"],["gopalganj","গোপালগঞ্জ"],["pirojpur","পিরোজপুর"],
                  ["dhaka","ঢাকা"],["rajshahi","রাজশাহী"],
                  ["lalmonirhat","লালমনিরহাট"],["thakurgaon","ঠাকুরগাঁও"],["gazipur","গাজীপুর"],["bagerhat","বাগেরহাট"]];
-  $("statsGrid").innerHTML = order.map(([k, label]) => {
-    const rows = s[k].rows;
-    const pct = s.total ? Math.round(rows / s.total * 100) : 0;
-    return `<div class="stat"><div class="stat-label">${label}</div>` +
-      `<div class="stat-value">${bn(rows)}</div>` +
-      `<div class="dbar"><span style="width:${pct}%"></span></div>` +
-      `<div class="stat-note">মোটের ${bn(pct)}%</div></div>`;
-  }).join("");
   // Donut chart — জেলার ভোটার ভাগ, বড় থেকে ছোট সাজানো (লাইভ ডাটা থেকে)।
   const ranked = order.map(([k, label]) => ({ label, rows: s[k].rows }))
     .sort((a, b) => b.rows - a.rows);
@@ -476,11 +462,20 @@ function loadStats() {
   $("donutSvg").innerHTML = donutSVG(ranked, s.total);
   $("donutLegend").innerHTML = ranked.map((it, i) => {
     const pct = s.total ? Math.round(it.rows / s.total * 100) : 0;
-    return `<div class="legend-row"><span class="legend-dot" style="background:${DONUT_COLORS[i]}"></span>` +
+    return `<div class="legend-row" style="animation:legendIn .3s ease-out ${i * 40}ms both"><span class="legend-dot" style="background:${DONUT_COLORS[i]}"></span>` +
       `<span><span class="legend-name">${esc(it.label)}</span>` +
       `<span class="legend-val">${bn(it.rows)} · ${bn(pct)}%</span></span></div>`;
   }).join("");
   $("donutCard").style.display = "block";
+  // Donut draw-in: slices grow from 0, staggered by rank; center fades in.
+  const dc = document.querySelector(".donut-center");
+  dc.classList.remove("fade-in"); void dc.offsetWidth; dc.classList.add("fade-in");
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelectorAll("#donutSvg .donut-arc").forEach((c, i) => {
+      c.style.transition = "stroke-dasharray .7s ease-out " + (i * 60) + "ms";
+      c.style.strokeDasharray = c.dataset.dash;
+    });
+  }));
   }).catch(() => {
     showStatsError("পরিসংখ্যান লোড হয়নি — লিংকটি চালু আছে কিনা দেখুন, তারপর আবার চেষ্টা করুন", true);
   });
