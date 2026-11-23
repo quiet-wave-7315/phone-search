@@ -356,6 +356,7 @@ button.search:disabled{opacity:.5;cursor:default}
         </div>
       </div>
     </div>
+    <div class="msg" id="filtersMsg" style="display:none;margin-top:12px"></div>
     <button type="button" class="details-toggle" id="detailsToggle">＋ আরো বিস্তারিত খোঁজ</button>
     <div id="details">
       <div class="field" style="margin-top:14px">
@@ -412,6 +413,9 @@ if (_uk) {
   try { KEY = localStorage.getItem("voter_key") || ""; } catch (e) {}
 }
 const withKey = u => API + u + (u.includes("?") ? "&" : "?") + "key=" + encodeURIComponent(KEY);
+// ngrok ফ্রি প্ল্যানের ব্রাউজার সতর্কতা পাতা এড়াতে — সব API কলে এই হেডার লাগে,
+// না হলে ব্রাউজার JSON-এর বদলে সতর্কতার HTML পায় আর r.json() ভেঙে যায়।
+const apiFetch = u => fetch(withKey(u), { headers: { "ngrok-skip-browser-warning": "true" } });
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "—").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const bn = n => Number(n).toLocaleString("bn-BD");
@@ -442,7 +446,7 @@ function donutSVG(items, total) {
 // পরিসংখ্যান লোড — ব্যর্থ হলে চুপ করে থাকবে না, কারণ দেখাবে।
 function loadStats() {
   $("statsMsg").style.display = "none";
-  fetch(withKey("/api/stats")).then(r => r.json()).then(s => {
+  apiFetch("/api/stats").then(r => r.json()).then(s => {
   if (s.error) {
     showStatsError(s.error, false);
     if (typeof handleKeyError === "function") handleKeyError(s.error);
@@ -540,15 +544,40 @@ $("districtSel").onchange = function () {
 function loadFilters() {
   const box = $("filters");
   if (district === "all") { box.style.display = "none"; return; }
-  fetch(withKey("/api/filters?district=" + district)).then(r => r.json()).then(f => {
+  $("filtersMsg").style.display = "none";
+  apiFetch("/api/filters?district=" + district).then(r => r.json()).then(f => {
+    if (f.error) { showFiltersError(f.error); return; }
     const fill = (el, items) => {
       el.innerHTML = '<option value="">— সব —</option>' +
-        items.map(v => `<option value="${v}">${v}</option>`).join("");
+        items.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
     };
     fill($("upazila"), f.upazila); fill($("union"), f.union);
     box.style.display = "block";
+  }).catch(() => {
+    showFiltersError("উপজেলা/ইউনিয়ন লোড হয়নি — লিংকটি চালু আছে কিনা দেখুন, তারপর জেলা আবার বাছুন");
   });
 }
+
+// ফিল্টার ভুলের মেসেজ — জেলার ড্রপডাউন বা সার্চ ফর্ম লুকাবে না, শুধু কারণ দেখাবে।
+function showFiltersError(msg) {
+  $("filtersMsg").textContent = msg;
+  $("filtersMsg").style.display = "block";
+}
+
+// উপজেলা বদলালে ইউনিয়ন আবার লোড করো — শুধু ওই উপজেলার ইউনিয়ন।
+$("upazila").onchange = function () {
+  const up = $("upazila").value;
+  $("union").innerHTML = '<option value="">— সব —</option>';
+  $("filtersMsg").style.display = "none";
+  const q = "/api/filters?district=" + district + (up ? "&upazila=" + encodeURIComponent(up) : "");
+  apiFetch(q).then(r => r.json()).then(f => {
+    if (f.error) { showFiltersError(f.error); return; }
+    $("union").innerHTML = '<option value="">— সব —</option>' +
+      f.union.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+  }).catch(() => {
+    showFiltersError("ইউনিয়ন লোড হয়নি — লিংকটি চালু আছে কিনা দেখুন, তারপর উপজেলা আবার বাছুন");
+  });
+};
 
 const genderClass = g => g === "মহিলা" ? "f" : g === "পুরুষ" ? "m" : g === "হিজড়া" ? "h" : "";
 
@@ -579,7 +608,7 @@ function run(p) {
     if ($("upazila").value) params.set("upazila", $("upazila").value);
     if ($("union").value) params.set("union", $("union").value);
   }
-  fetch(withKey("/api/search?" + params)).then(r => r.json()).then(d => {
+  apiFetch("/api/search?" + params).then(r => r.json()).then(d => {
     $("go").disabled = false;
     if (d.error) { $("meta").textContent = d.error; $("results").innerHTML = ""; $("pager").style.display = "none"; return; }
     hasMore = d.has_more;
