@@ -232,6 +232,27 @@ button.search:disabled{opacity:.5;cursor:default}
 .person-rows .wide{flex-direction:column;gap:1px}
 .person-rows .wide span:last-child{text-align:left}
 
+/* ---------- related (সম্পর্কিত রেকর্ড) ---------- */
+.rel-btn{margin-top:4px}
+.modal{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:20px 14px;overflow-y:auto}
+.modal-backdrop{position:fixed;inset:0;background:rgba(19,28,24,.55)}
+.modal-box{
+  position:relative;width:100%;max-width:640px;background:var(--card);
+  border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lg);padding:20px;
+}
+.modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.modal-head h3{font-family:var(--serif);font-weight:400;font-size:1.2rem;letter-spacing:-.02em;margin:0;line-height:1.3}
+.rel-row{
+  display:flex;gap:12px;align-items:flex-start;padding:12px;
+  border:1px solid var(--line);border-radius:12px;margin-bottom:8px;cursor:pointer;
+  transition:border-color .16s,background .16s;
+}
+.rel-row:hover,.rel-row:focus-visible{border-color:var(--green);background:var(--green-wash);outline:none}
+.rel-photo{flex:0 0 48px;width:48px;height:64px;object-fit:cover;border-radius:9px;border:1px solid var(--line);background:var(--paper)}
+.rel-main{flex:1;min-width:0}
+.rel-name{font-weight:700;font-size:.92rem;line-height:1.3}
+.rel-meta{font-size:.78rem;color:var(--ink-2);line-height:1.5}
+
 .empty{
   text-align:center;padding:48px 24px;color:var(--ink-3);
   border:1px dashed var(--line-2);border-radius:var(--r);background:var(--paper-2);
@@ -385,6 +406,17 @@ button.search:disabled{opacity:.5;cursor:default}
   </div>
   <footer class="foot">ভোটার তালিকা — ব্যক্তিগত ব্যবহারের জন্য</footer>
   <div style="text-align:center;margin-top:10px"><button class="btn btn-ghost" id="changeKey">key বদলান / মুছুন</button></div>
+  <!-- সম্পর্কিত রেকর্ড পপআপ (একই পিতা-মাতা, হুবহু মিল) -->
+  <div class="modal" id="relatedModal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="relatedTitle">
+    <div class="modal-backdrop" id="relatedBackdrop"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="relatedTitle">সম্পর্কিত রেকর্ড</h3>
+        <button class="btn btn-ghost" id="relatedClose" type="button">বন্ধ করুন</button>
+      </div>
+      <div id="relatedBody"></div>
+    </div>
+  </div>
 </div>
 </div>
 <script>
@@ -394,6 +426,9 @@ try {
   if (saved) document.documentElement.dataset.theme = saved;
 } catch (e) {}
 let district = "all", page = 1, hasMore = false;
+let currentResults = [];   // এই পাতার রেজাল্ট (কার্ডের বোতাম এখান থেকে নেয়)
+let relatedResults = [];   // পপআপের সম্পর্কিত রেকর্ড
+let relatedPerson = null;  // যার সম্পর্কিত রেকর্ড দেখানো হচ্ছে
 let API = ""; // tunnel base URL, current.json থেকে আসে — ফাইলে hardcode নেই
 let KEY = "";
 // ?key= থাকলে সেভ করো, না থাকলে এই ফোনে সেভ করা key নাও।
@@ -605,6 +640,108 @@ $("union").onchange = function () {
 
 const genderClass = g => g === "মহিলা" ? "f" : g === "পুরুষ" ? "m" : g === "হিজড়া" ? "h" : "";
 
+// একজনের কার্ড — মূল রেজাল্ট আর পপআপের বিস্তারিত দুই জায়গায় একই লেআউট।
+// relatedOnclick থাকলে নিচে "সম্পর্কিত দেখুন" বোতাম আসে, না থাকলে আসে না।
+function personCardHTML(r, relatedOnclick) {
+  return `
+      <article class="person-card">
+        <div class="person-top">
+          ${r.photo ? `<img class="r-photo" src="${esc(withKey(r.photo))}" alt="" loading="lazy">` : ""}
+          <div class="person-main">
+            <p class="person-name">${esc(r.name)}</p>
+            <div class="person-meta">ভোটার নং ${esc(r.voter_no)} · ${esc(r.district)} · ${esc(r.upazila)}</div>
+          </div>
+          <span class="badge ${genderClass(r.gender)}">${esc(r.gender)}</span>
+        </div>
+        <div class="person-rows">
+          <div><span>বাবা</span><span>${esc(r.father)}</span></div>
+          <div><span>মা</span><span>${esc(r.mother)}</span></div>
+          <div><span>জন্মতারিখ</span><span>${esc(r.dob)}</span></div>
+          <div><span>পেশা</span><span>${esc(r.occupation)}</span></div>
+          <div class="wide"><span>ঠিকানা</span><span>${esc(r.address)}</span></div>
+          <div><span>ইউনিয়ন</span><span>${esc(r.union)} · ওয়ার্ড ${r.ward ?? "—"}</span></div>
+          <div><span>এলাকা</span><span>${esc(r.area_name)}</span></div>
+        </div>
+        ${relatedOnclick ? `<button class="btn btn-ghost btn-block rel-btn" type="button" onclick="${relatedOnclick}">সম্পর্কিত দেখুন</button>` : ""}
+      </article>`;
+}
+
+// ---------- সম্পর্কিত রেকর্ড (একই পিতা-মাতা, হুবহু মিল) ----------
+function openRelated(i) {
+  const p = currentResults[i];
+  if (p) fetchRelated(p);
+}
+function openRelatedFromModal(i) {
+  const p = relatedResults[i];
+  if (p) fetchRelated(p);
+}
+function fetchRelated(p) {
+  relatedPerson = p;
+  const dk = p.district_key || (district !== "all" ? district : "");
+  if (!p.father || !p.mother || !dk) {
+    $("relatedTitle").textContent = "সম্পর্কিত রেকর্ড";
+    $("relatedBody").innerHTML = '<div class="empty"><h4>আর কোনো রেকর্ড নেই</h4><p>এই পিতা-মাতার নামে আর কোনো রেকর্ড পাওয়া যায়নি।</p></div>';
+    openModal();
+    return;
+  }
+  const params = new URLSearchParams({ district: dk, father: p.father, mother: p.mother });
+  if (p.voter_no) params.set("exclude_voter_no", p.voter_no);
+  if (p.serial != null && p.serial !== "") params.set("exclude_serial", String(p.serial));
+  if (p.source_pdf) params.set("exclude_pdf", p.source_pdf);
+  $("relatedTitle").textContent = "সম্পর্কিত রেকর্ড — " + p.name;
+  $("relatedBody").innerHTML = '<p class="muted">খুঁজছি…</p>';
+  openModal();
+  apiFetch("/api/related?" + params).then(r => r.json()).then(d => {
+    if (d.error) { $("relatedBody").innerHTML = '<div class="msg">' + esc(d.error) + '</div>'; return; }
+    relatedResults = d.results || [];
+    renderRelatedList();
+  }).catch(() => {
+    $("relatedBody").innerHTML = '<div class="msg">সম্পর্কিত রেকর্ড লোড হয়নি — লিংকটি চালু আছে কিনা দেখুন, তারপর আবার চেষ্টা করুন।</div>';
+  });
+}
+function renderRelatedList() {
+  const p = relatedPerson;
+  $("relatedTitle").textContent = "সম্পর্কিত রেকর্ড — " + (p ? p.name : "");
+  if (!relatedResults.length) {
+    $("relatedBody").innerHTML = '<div class="empty"><h4>আর কোনো রেকর্ড নেই</h4><p>এই পিতা-মাতার নামে আর কোনো রেকর্ড পাওয়া যায়নি।</p></div>';
+    return;
+  }
+  $("relatedBody").innerHTML =
+    '<p class="muted small" style="margin:0 0 10px">' + relatedResults.length + ' জন পাওয়া গেছে — একই পিতা ও মাতার নাম (হুবহু মিল)।</p>' +
+    relatedResults.map((r, i) => `
+      <div class="rel-row" onclick="showRelatedDetail(${i})" onkeydown="if(event.key==='Enter')showRelatedDetail(${i})" role="button" tabindex="0">
+        ${r.photo ? `<img class="rel-photo" src="${esc(withKey(r.photo))}" alt="" loading="lazy">` : ""}
+        <div class="rel-main">
+          <div class="rel-name">${esc(r.name)}</div>
+          <div class="rel-meta">ভোটার নং ${esc(r.voter_no)} · ${esc(r.upazila)} · ${esc(r.union)} · ${esc(r.area_name)}</div>
+          <div class="rel-meta">বাবা: ${esc(r.father)} · মা: ${esc(r.mother)}</div>
+          <div class="rel-meta">জন্মতারিখ ${esc(r.dob)} · লিঙ্গ ${esc(r.gender)}</div>
+        </div>
+        <span class="badge ${genderClass(r.gender)}">${esc(r.gender)}</span>
+      </div>`).join("");
+}
+function showRelatedDetail(i) {
+  const r = relatedResults[i];
+  if (!r) return;
+  $("relatedTitle").textContent = r.name;
+  $("relatedBody").innerHTML =
+    '<button class="btn btn-ghost" type="button" onclick="renderRelatedList()" style="margin-bottom:12px">← ফিরে যান</button>' +
+    personCardHTML(r, `openRelatedFromModal(${i})`);
+}
+function openModal() {
+  $("relatedModal").style.display = "flex";
+  document.body.style.overflow = "hidden";
+}
+function closeModal() {
+  $("relatedModal").style.display = "none";
+  document.body.style.overflow = "";
+}
+$("relatedClose").onclick = closeModal;
+$("relatedBackdrop").onclick = closeModal;
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && $("relatedModal").style.display !== "none") closeModal();
+});
+
 $("detailsToggle").onclick = () => {
   const d = $("details"), open = d.classList.toggle("open");
   $("detailsToggle").textContent = open ? "－ বিস্তারিত খোঁজ লুকান" : "＋ আরো বিস্তারিত খোঁজ";
@@ -646,26 +783,8 @@ function run(p) {
       $("pager").style.display = "none";
       return;
     }
-    $("results").innerHTML = d.results.map(r => `
-      <article class="person-card">
-        <div class="person-top">
-          ${r.photo ? `<img class="r-photo" src="${esc(withKey(r.photo))}" alt="" loading="lazy">` : ""}
-          <div class="person-main">
-            <p class="person-name">${esc(r.name)}</p>
-            <div class="person-meta">ভোটার নং ${esc(r.voter_no)} · ${esc(r.district)} · ${esc(r.upazila)}</div>
-          </div>
-          <span class="badge ${genderClass(r.gender)}">${esc(r.gender)}</span>
-        </div>
-        <div class="person-rows">
-          <div><span>বাবা</span><span>${esc(r.father)}</span></div>
-          <div><span>মা</span><span>${esc(r.mother)}</span></div>
-          <div><span>জন্মতারিখ</span><span>${esc(r.dob)}</span></div>
-          <div><span>পেশা</span><span>${esc(r.occupation)}</span></div>
-          <div class="wide"><span>ঠিকানা</span><span>${esc(r.address)}</span></div>
-          <div><span>ইউনিয়ন</span><span>${esc(r.union)} · ওয়ার্ড ${r.ward ?? "—"}</span></div>
-          <div><span>এলাকা</span><span>${esc(r.area_name)}</span></div>
-        </div>
-      </article>`).join("");
+    currentResults = d.results;
+    $("results").innerHTML = d.results.map((r, i) => personCardHTML(r, `openRelated(${i})`)).join("");
     $("pager").style.display = "flex";
     $("prev").disabled = page <= 1;
     $("next").disabled = !hasMore;
