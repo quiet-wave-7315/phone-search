@@ -288,7 +288,7 @@ button.search:disabled{opacity:.5;cursor:default}
     <div class="brand-mark" aria-hidden="true">ভ</div>
     <div class="head-text">
       <h1>ভোটার সার্চ <span class="badge badge-ok">প্রাইভেট</span></h1>
-      <p class="sub">খুলনা · যশোর · সাতক্ষীরা · বরিশাল · গোপালগঞ্জ · পিরোজপুর · ঢাকা · রাজশাহী · লালমনিরহাট · ঠাকুরগাঁও · গাজীপুর · বাগেরহাট</p>
+      <p class="sub">খুলনা · যশোর · সাতক্ষীরা · বরিশাল · গোপালগঞ্জ · পিরোজপুর · ঢাকা · রাজশাহী · লালমনিরহাট · ঠাকুরগাঁও · গাজীপুর · বাগেরহাট · নোয়াখালী · নরসিংদী · লক্ষ্মীপুর · নীলফামারী · ব্রাহ্মণবাড়িয়া · মেহেরপুর · জামালপুর · ঝালকাঠি</p>
     </div>
     <button class="icon-btn" id="themeToggle" title="থিম বদলান" aria-label="থিম বদলান">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -305,7 +305,7 @@ button.search:disabled{opacity:.5;cursor:default}
         <span class="live"><span class="dot"></span>লাইভ</span>
       </div>
       <div class="dash-total" id="totalCount">…</div>
-      <div class="dash-sub">১২ জেলার ভোটার তালিকা · খুলনা · যশোর · সাতক্ষীরা · বরিশাল · গোপালগঞ্জ · পিরোজপুর · ঢাকা · রাজশাহী · লালমনিরহাট · ঠাকুরগাঁও · গাজীপুর · বাগেরহাট</div>
+      <div class="dash-sub">২০ জেলার ভোটার তালিকা · খুলনা · যশোর · সাতক্ষীরা · বরিশাল · গোপালগঞ্জ · পিরোজপুর · ঢাকা · রাজশাহী · লালমনিরহাট · ঠাকুরগাঁও · গাজীপুর · বাগেরহাট · নোয়াখালী · নরসিংদী · লক্ষ্মীপুর · নীলফামারী · ব্রাহ্মণবাড়িয়া · মেহেরপুর · জামালপুর · ঝালকাঠি</div>
     </div>
     <div class="dash-donut" id="donutCard" style="display:none">
       <div class="donut-head">
@@ -349,6 +349,14 @@ button.search:disabled{opacity:.5;cursor:default}
         <option value="thakurgaon">ঠাকুরগাঁও</option>
         <option value="gazipur">গাজীপুর</option>
         <option value="bagerhat">বাগেরহাট</option>
+        <option value="noakhali">নোয়াখালী</option>
+        <option value="narsingdi">নরসিংদী</option>
+        <option value="lakshmipur">লক্ষ্মীপুর</option>
+        <option value="nilphamari">নীলফামারী</option>
+        <option value="brahmanbaria">ব্রাহ্মণবাড়িয়া</option>
+        <option value="meherpur">মেহেরপুর</option>
+        <option value="jamalpur">জামালপুর</option>
+        <option value="jhalokati">ঝালকাঠি</option>
       </select>
     </div>
     <div class="field" style="margin-top:14px">
@@ -458,7 +466,9 @@ $("themeToggle").onclick = function () {
 };
 
 const DONUT_COLORS = ["#0d4a37","#177a5c","#20a077","#3aa77e","#6dbf9e","#0e7a6e",
-                      "#9a6a10","#c08a2e","#2f4a8a","#5b74b0","#b8402a","#d9604a"];
+                      "#9a6a10","#c08a2e","#2f4a8a","#5b74b0","#b8402a","#d9604a",
+                      "#7a4a8a","#a05bb0","#8a6d2f","#4a7a2f","#2f8a7a","#8a2f4a",
+                      "#5a5a5a","#c07a3e"];
 function donutSVG(items, total) {
   const R = 80, C = 2 * Math.PI * R;
   let off = 0;
@@ -485,7 +495,9 @@ function loadStats() {
   const order = [["khulna","খুলনা"],["jessore","যশোর"],["satkhira","সাতক্ষীরা"],
                  ["barishal","বরিশাল"],["gopalganj","গোপালগঞ্জ"],["pirojpur","পিরোজপুর"],
                  ["dhaka","ঢাকা"],["rajshahi","রাজশাহী"],
-                 ["lalmonirhat","লালমনিরহাট"],["thakurgaon","ঠাকুরগাঁও"],["gazipur","গাজীপুর"],["bagerhat","বাগেরহাট"]];
+                 ["lalmonirhat","লালমনিরহাট"],["thakurgaon","ঠাকুরগাঁও"],["gazipur","গাজীপুর"],["bagerhat","বাগেরহাট"],
+                 ["noakhali","নোয়াখালী"],["narsingdi","নরসিংদী"],["lakshmipur","লক্ষ্মীপুর"],["nilphamari","নীলফামারী"],
+                 ["brahmanbaria","ব্রাহ্মণবাড়িয়া"],["meherpur","মেহেরপুর"],["jamalpur","জামালপুর"],["jhalokati","ঝালকাঠি"]];
   // Donut chart — জেলার ভোটার ভাগ, বড় থেকে ছোট সাজানো (লাইভ ডাটা থেকে)।
   const ranked = order.map(([k, label]) => ({ label, rows: s[k].rows }))
     .sort((a, b) => b.rows - a.rows);
